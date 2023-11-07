@@ -47,18 +47,50 @@ for data in [proc, c.raw.no_pm_3mm]:
     data.smooth(2, channel="diff_norm")
 
 proc.create_channel("pm_max", values=proc.diff_norm[:].max(axis=(2,3))[:,:,None,None])
-# create channels showing the intensity-optimized motor positions
-L2_opt = np.empty((proc.w3_points.size, proc.w1_points.size))
-L3_opt = np.empty((proc.w3_points.size, proc.w1_points.size))
-for i, j in np.ndindex((proc.w3_points.size, proc.w1_points.size)):
-    dij = proc.at(w3_points=[proc.w3_points.points[i], "wn"], w1_points=[proc.w1_points.points[j], "wn"])
-    opt = np.unravel_index(np.argmax(dij.diff_norm[:]), shape=dij.diff.shape)
-    L3_opt[i,j] = proc.L3_points.points[opt[0]] * 0.3/2  # convert ps to mm displacement
-    L2_opt[i,j] = proc.L2_points.points[opt[1]] * 0.3/2  # convert ps to mm displacement
-proc.create_channel("L1_opt", values=L2_opt[:,:,None, None], signed=True, units="mm")
-proc.create_channel("L3_opt", values=L3_opt[:,:,None, None], signed=True, units="mm")
 
 # rename variables for more transparent usage
 proc.rename_variables(L2="L1", w3="w2")
+
+# --- --- regrid 4D dataset to l1 and l3 absolute positions ---------------------------------------
+#  (instead of setpoint deviation)
+offsets = wt.open(here.parent / "simulation" / "phase_matched_solutions.wt5")
+for chan in ["L1", "L3"]:
+    offsets[chan][:] -= offsets[chan].null
+    offsets[chan].null = 0
+offsets = offsets.map_variable("w_1", proc.w1_points[:].reshape(-1,1)).map_variable("w_2", proc.w2_points[:].reshape(1,-1))
+
+proc.L1_points.convert("mm_delay")
+proc.L3_points.convert("mm_delay")
+
+l1a = np.linspace(offsets.L1.min() + proc.L1_points.min(), offsets.L1.max() + proc.L1_points.max(), 31)
+l3a = np.linspace(offsets.L3.min() + proc.L3_points.min(), offsets.L3.max() + proc.L3_points.max(), 31)
+
+d_abs = wt.Data(name="l1l3_absolute", parent=c)
+d_abs.create_variable("w_1", values=offsets.w_1[:].reshape(-1,1,1,1), units="wn")
+d_abs.create_variable("w_2", values=offsets.w_2[:].reshape(1,-1,1,1), units="wn")
+d_abs.create_variable("L_3", values=l3a.reshape(1,1,-1,1), units="mm")
+d_abs.create_variable("L_1", values=l1a.reshape(1,1,1,-1), units="mm")
+
+interp = np.empty((d_abs.w_1.size, d_abs.w_2.size, d_abs.L_3.size, d_abs.L_1.size))
+
+# walk w1,w2 and interpolate the offsets to the new grid
+from scipy.interpolate import LinearNDInterpolator
+for ij in np.ndindex((d_abs.w_1.size, d_abs.w_2.size)):
+    w1i = d_abs.w_1.points[ij[0]]
+    w2j = d_abs.w_2.points[ij[1]]
+    print(ij, w1i, w2j)
+    intensity = proc.at(w1_points=[w1i,"wn"], w2_points=[w2j,"wn"]).diff[:]
+    L1s = (proc.L1_points[:][0,0] + offsets.L1[:][ij]).flatten()
+    L3s = (proc.L3_points[:][0,0] + offsets.L3[:][ij]).flatten()
+    points = [[L3s[k], L1s[l]] for k,l in np.ndindex((L3s.size, L1s.size))]
+    values = [intensity[kl] for kl in np.ndindex((L3s.size, L1s.size))]
+
+    interpij = LinearNDInterpolator(points, values)
+    interp[ij] = interpij(l3a[:, None], l1a[None, :])
+
+d_abs.create_channel("interp", interp)
+d_abs.transform("w_1", "w_2", "L_3", "L_1")
+d_abs.create_channel("I1I2", values=np.transpose(proc.I1I2[:], (1,0,2,3)))
+d_abs.create_channel("interp_norm", values=d_abs.interp[:] / d_abs.I1I2[:])
 
 c.save(here / "composed.wt5", overwrite=True)
