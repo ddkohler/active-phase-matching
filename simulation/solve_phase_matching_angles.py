@@ -49,7 +49,7 @@ for i, wi in enumerate(w1):
 sim = wt.Data(name="phase_matching_angles")
 sim.create_variable("w_1", w1[:, None], units="wn")
 sim.create_variable("w_2", w2[None, :], units="wn")
-sim.create_variable("w_3", np.array([18400]).reshape(1,1))
+sim.create_variable("w_3", np.array([18400]).reshape(1,1), units="wn")
 for i, angle in enumerate(["alpha", "beta", "gamma", "delta"]):
     sim.create_channel(
         angle, 

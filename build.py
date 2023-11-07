@@ -36,7 +36,7 @@ def build_data():
     print_then_call(python, str(here / "simulation" / "phase_matching_simulation.py"))
     print_then_call(python, str(here / "simulation" / "solve_phase_matching_angles.py"))
     print_then_call(python, str(here / "simulation" / "empirical.py"))
-    print_then_call(python, str(here / "data" / "collate_data.py"))
+    print_then_call(python, str(here / "data" / "compose.py"))
 
 
 def build_figures():
