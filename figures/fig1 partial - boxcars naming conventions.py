@@ -65,6 +65,6 @@ plt.arrow(*k_iso[1], *k_iso[3], color="blue", **kwargs)
 
 
 if save:
-    wt.artists.savefig(here / f"{pathlib.Path(__file__).name}.png")
+    wt.artists.savefig(here / f"{pathlib.Path(__file__).name[:-3]}.png")
 else:
     plt.show()
