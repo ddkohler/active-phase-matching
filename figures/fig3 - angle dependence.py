@@ -110,5 +110,5 @@ for i, ax in enumerate([ax2, ax3, ax0, ax1]):
 if not save:
     plt.show()
 else:
-    wt.artists.savefig(here / f"{pathlib.Path(__file__).name}.png")
+    wt.artists.savefig(here / f"{pathlib.Path(__file__).name[:-3]}.png")
 
